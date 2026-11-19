@@ -13,16 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
           fetch-depth: 0
       - name: Download and reconstruct archives
         shell: bash
         run: |
           set -euo pipefail
-          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/0tgT7NkRuvs5yHYn-nHreyVHCw-wisrf9umlElvq-6E' -o /tmp/yademan.part00
-          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/RQ-ukmwIu-V4rQoa1pLdPPpydUiDuP8pD_K16ZGW818' -o /tmp/yademan.part01
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/npDiqsIUjFb5AnYM5HsaYnCKsqQ7PYnIE9pad76dO5g' -o /tmp/yademan.part00
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/o4xANuDUYiE83bDVre6MjYp1sNKZQZB9pk2En9Ue2CM' -o /tmp/yademan.part01
           cat /tmp/yademan.part00 /tmp/yademan.part01 > yademan-images.zip
-          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/RXgB0RTjAMi9tGQDqrT-P0jWnhgE04jYuz-M9K6-BYg' -o yademan-images-webp95.zip
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/S96OGZNnsiZzWeyjxyGihteoNmqIqW_yQRPFfoYYn8I' -o yademan-images-webp95.zip
           test "$(stat -c%s yademan-images.zip)" = "548088064"
           test "$(stat -c%s yademan-images-webp95.zip)" = "417858734"
       - name: Extract into flat top-level folders
@@ -47,4 +47,3 @@ jobs:
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Extract Yademan image archives into repository folders'
           git push origin HEAD:main
 
-# extraction workflow revision
