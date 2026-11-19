@@ -1,0 +1,17 @@
+{
+  "quality": 95,
+  "method": 6,
+  "source_images": 3570,
+  "converted": 3570,
+  "failed": 0,
+  "source_bytes": 546624896,
+  "webp_bytes": 416053624,
+  "source_formats": {
+    "JPEG": 3201,
+    "PNG": 358,
+    "WEBP": 7,
+    "AVIF": 4
+  },
+  "errors": [],
+  "elapsed_seconds": 1214.6
+}
