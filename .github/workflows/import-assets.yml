@@ -46,3 +46,5 @@ jobs:
           git add .gitattributes yademan-images.zip yademan-images-webp95.zip yademan-images/ yademan-images-webp95/
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Extract Yademan image archives into repository folders'
           git push origin HEAD:main
+
+# extraction workflow revision
