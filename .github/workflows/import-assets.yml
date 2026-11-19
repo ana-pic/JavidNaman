@@ -19,16 +19,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p incoming
-          curl -fL --retry 3 'https://mcp.sentinelx.app/files/d/0tgT7NkRuvs5yHYn-nHreyVHCw-wisrf9umlElvq-6E' -o /tmp/yademan.part00
-          curl -fL --retry 3 'https://mcp.sentinelx.app/files/d/RQ-ukmwIu-V4rQoa1pLdPPpydUiDuP8pD_K16ZGW818' -o /tmp/yademan.part01
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/0tgT7NkRuvs5yHYn-nHreyVHCw-wisrf9umlElvq-6E' -o /tmp/yademan.part00
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/RQ-ukmwIu-V4rQoa1pLdPPpydUiDuP8pD_K16ZGW818' -o /tmp/yademan.part01
           cat /tmp/yademan.part00 /tmp/yademan.part01 > yademan-images.zip
-          curl -fL --retry 3 'https://mcp.sentinelx.app/files/d/RXgB0RTjAMi9tGQDqrT-P0jWnhgE04jYuz-M9K6-BYg' -o yademan-images-webp95.zip
+          curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/RXgB0RTjAMi9tGQDqrT-P0jWnhgE04jYuz-M9K6-BYg' -o yademan-images-webp95.zip
           test "$(stat -c%s yademan-images.zip)" = "548088064"
           test "$(stat -c%s yademan-images-webp95.zip)" = "417858734"
       - name: Commit archives with Git LFS
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git lfs install
