@@ -25,11 +25,24 @@ jobs:
           curl -X POST -fL --retry 3 'https://mcp.sentinelx.app/files/d/RXgB0RTjAMi9tGQDqrT-P0jWnhgE04jYuz-M9K6-BYg' -o yademan-images-webp95.zip
           test "$(stat -c%s yademan-images.zip)" = "548088064"
           test "$(stat -c%s yademan-images-webp95.zip)" = "417858734"
-      - name: Commit archives with Git LFS
+      - name: Extract into flat top-level folders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/extract-original /tmp/extract-webp
+          unzip -q yademan-images.zip -d /tmp/extract-original
+          unzip -q yademan-images-webp95.zip -d /tmp/extract-webp
+          test -d /tmp/extract-original/yademan-images
+          test -d /tmp/extract-webp/yademan-images-webp95
+          mv /tmp/extract-original/yademan-images ./yademan-images
+          mv /tmp/extract-webp/yademan-images-webp95 ./yademan-images-webp95
+          echo "Original files: $(find yademan-images -type f | wc -l)"
+          echo "WebP files: $(find yademan-images-webp95 -type f | wc -l)"
+      - name: Commit archives and extracted folders
         run: |
           set -euo pipefail
           git lfs install
           git lfs track '*.zip'
-          git add .gitattributes yademan-images.zip yademan-images-webp95.zip
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Add Yademan image archives via Git LFS'
+          git add .gitattributes yademan-images.zip yademan-images-webp95.zip yademan-images/ yademan-images-webp95/
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Extract Yademan image archives into repository folders'
           git push origin HEAD:main
