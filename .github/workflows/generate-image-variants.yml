@@ -1,0 +1,60 @@
+name: Validate WebP image variants
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/generate-image-variants.yml"
+      - "scripts/generate-image-variants.py"
+      - "yademan-images-webp95/images/**"
+      - "yademan-thumbnails-webp/**"
+      - "yademan-medium-webp/**"
+      - "yademan-image-variants.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-image-variants-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check Pillow==12.3.0
+
+      - name: Regenerate and validate all variants
+        run: python scripts/generate-image-variants.py
+
+      - name: Verify committed image variants are reproducible
+        shell: bash
+        run: |
+          git diff --exit-code -- yademan-thumbnails-webp yademan-medium-webp
+          git diff --exit-code -- yademan-images-webp95
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          committed = json.loads(subprocess.check_output(
+              ["git", "show", "HEAD:yademan-image-variants.json"], text=True
+          ))
+          generated = json.loads(Path("yademan-image-variants.json").read_text(encoding="utf-8"))
+          committed.pop("elapsed_seconds", None)
+          generated.pop("elapsed_seconds", None)
+          if committed != generated:
+              raise SystemExit("Committed manifest differs from regenerated manifest")
+          print("Image directories, source tree, and manifest match the reproducible output.")
+          PY
