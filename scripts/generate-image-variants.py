@@ -48,6 +48,7 @@ def process(source: Path):
             base = oriented.convert("L")
         else:
             base = oriented.convert("RGB")
+        base.info.clear()
         thumb_dims = make_variant(base, thumb_path, (160, 200), 76)
         medium_dims = make_variant(base, medium_path, (480, 600), 82)
 
