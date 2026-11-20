@@ -38,7 +38,7 @@ def encode(source: Path, destination: Path, bounds: tuple[int, int], quality: in
         out_width, out_height = image.size
         if out_width > width or out_height > height:
             raise ValueError("upscaling detected")
-        image.save(destination, format="WEBP", quality=quality, method=6)
+        image.save(destination, format="WEBP", quality=quality, method=4)
         return width, height, out_width, out_height
 
 
