@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Generate metadata-free WebP thumbnail and medium variants without cropping or upscaling."""
+"""Generate metadata-free WebP thumbnail and medium variants without crop or upscaling."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
+import os
+from pathlib import Path
 import shutil
 import time
-from pathlib import Path
 
 from PIL import Image, ImageOps
 
@@ -19,27 +21,58 @@ TMP_THUMB = REPO / ".yademan-thumbnails-webp.tmp"
 TMP_MEDIUM = REPO / ".yademan-medium-webp.tmp"
 
 
-def encode(source: Path, destination: Path, bounds: tuple[int, int], quality: int):
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def make_variant(base: Image.Image, destination: Path, bounds: tuple[int, int], quality: int):
+    output = base.copy()
+    output.thumbnail(bounds, Image.Resampling.LANCZOS, reducing_gap=3.0)
+    output.save(destination, format="WEBP", quality=quality, method=0)
+    return output.width, output.height
+
+
+def process(source: Path):
+    relative = source.relative_to(SOURCE)
+    thumb_path = TMP_THUMB / "images" / relative
+    medium_path = TMP_MEDIUM / "images" / relative
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    medium_path.parent.mkdir(parents=True, exist_ok=True)
+
     with Image.open(source) as opened:
         if getattr(opened, "n_frames", 1) != 1:
-            raise ValueError("animated source is not supported by this static-image pipeline")
-        image = ImageOps.exif_transpose(opened)
-        image.load()
-        width, height = image.size
-        has_alpha = "A" in image.getbands() or "transparency" in opened.info
+            raise ValueError("animated source is not supported")
+        oriented = ImageOps.exif_transpose(opened)
+        oriented.load()
+        source_width, source_height = oriented.size
+        has_alpha = "A" in oriented.getbands() or "transparency" in opened.info
         if has_alpha:
-            image = image.convert("RGBA")
-        elif image.mode == "L":
-            image = image.convert("L")
+            base = oriented.convert("RGBA")
+        elif oriented.mode == "L":
+            base = oriented.convert("L")
         else:
-            image = image.convert("RGB")
-        image.thumbnail(bounds, Image.Resampling.LANCZOS, reducing_gap=3.0)
-        out_width, out_height = image.size
-        if out_width > width or out_height > height:
+            base = oriented.convert("RGB")
+        thumb_dims = make_variant(base, thumb_path, (160, 200), 76)
+        medium_dims = make_variant(base, medium_path, (480, 600), 82)
+
+    for width, height in (thumb_dims, medium_dims):
+        if width > source_width or height > source_height:
             raise ValueError("upscaling detected")
-        image.save(destination, format="WEBP", quality=quality, method=0)
-        return width, height, out_width, out_height
+        if abs((width / height) / (source_width / source_height) - 1.0) > 0.02:
+            raise ValueError("aspect ratio changed beyond rounding tolerance")
+
+    relative_text = relative.as_posix()
+    return {
+        "id": hashlib.sha256(relative_text.encode("utf-8")).hexdigest(),
+        "source": f"yademan-images-webp95/images/{relative_text}",
+        "thumbnail": f"yademan-thumbnails-webp/images/{relative_text}",
+        "medium": f"yademan-medium-webp/images/{relative_text}",
+        "source_width": source_width,
+        "source_height": source_height,
+        "thumbnail_width": thumb_dims[0],
+        "thumbnail_height": thumb_dims[1],
+        "medium_width": medium_dims[0],
+        "medium_height": medium_dims[1],
+        "source_bytes": source.stat().st_size,
+        "thumbnail_bytes": thumb_path.stat().st_size,
+        "medium_bytes": medium_path.stat().st_size,
+    }
 
 
 def main():
@@ -58,52 +91,21 @@ def main():
             shutil.rmtree(path)
 
     images = []
-    source_bytes = thumbnail_bytes = medium_bytes = 0
     errors = []
-    for index, source in enumerate(files, 1):
-        relative = source.relative_to(SOURCE)
-        thumb_path = TMP_THUMB / "images" / relative
-        medium_path = TMP_MEDIUM / "images" / relative
-        try:
-            with Image.open(source) as opened:
-                if getattr(opened, "n_frames", 1) != 1:
-                    raise ValueError("animated source is not supported")
-                oriented = ImageOps.exif_transpose(opened)
-                oriented.load()
-                source_width, source_height = oriented.size
-            tw, th, t_width, t_height = encode(source, thumb_path, (160, 200), 76)
-            mw, mh, m_width, m_height = encode(source, medium_path, (480, 600), 82)
-            if (tw, th) != (mw, mh):
-                raise ValueError("orientation/dimension inconsistency between variants")
-            sb = source.stat().st_size
-            tb = thumb_path.stat().st_size
-            mb = medium_path.stat().st_size
-            source_bytes += sb
-            thumbnail_bytes += tb
-            medium_bytes += mb
-            relative_text = relative.as_posix()
-            images.append({
-                "id": hashlib.sha256(relative_text.encode("utf-8")).hexdigest(),
-                "source": f"yademan-images-webp95/images/{relative_text}",
-                "thumbnail": f"yademan-thumbnails-webp/images/{relative_text}",
-                "medium": f"yademan-medium-webp/images/{relative_text}",
-                "source_width": source_width,
-                "source_height": source_height,
-                "thumbnail_width": t_width,
-                "thumbnail_height": t_height,
-                "medium_width": m_width,
-                "medium_height": m_height,
-                "source_bytes": sb,
-                "thumbnail_bytes": tb,
-                "medium_bytes": mb,
-            })
-        except Exception as exc:
-            errors.append({"source": source.relative_to(REPO).as_posix(), "error": repr(exc)})
-        if index % 250 == 0:
-            print(f"processed {index}/{len(files)}", flush=True)
+    workers = min(4, os.cpu_count() or 2)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(process, source): source for source in files}
+        for index, future in enumerate(as_completed(futures), 1):
+            try:
+                images.append(future.result())
+            except Exception as exc:
+                errors.append({"source": futures[future].relative_to(REPO).as_posix(), "error": repr(exc)})
+            if index % 250 == 0:
+                print(f"processed {index}/{len(files)}", flush=True)
 
     if errors:
         raise RuntimeError(json.dumps({"failed": len(errors), "errors": errors[:20]}, ensure_ascii=False))
+    images.sort(key=lambda item: item["source"])
 
     validation = {
         "source_files": len(files),
@@ -153,6 +155,9 @@ def main():
 
     TMP_THUMB.rename(THUMB)
     TMP_MEDIUM.rename(MEDIUM)
+    source_bytes = sum(item["source_bytes"] for item in images)
+    thumbnail_bytes = sum(item["thumbnail_bytes"] for item in images)
+    medium_bytes = sum(item["medium_bytes"] for item in images)
     manifest = {
         "version": 1,
         "source_root": "yademan-images-webp95/images",
@@ -191,6 +196,7 @@ def main():
         "validation": validation,
         "elapsed_seconds": manifest["elapsed_seconds"],
         "manifest_bytes": MANIFEST.stat().st_size,
+        "workers": workers,
     }, ensure_ascii=False), flush=True)
 
 
