@@ -1,6 +1,8 @@
 name: Generate WebP image variants
 
 on:
+  push:
+    branches: [perf/generate-image-variants]
   pull_request:
     branches: [main]
     paths:
@@ -17,7 +19,7 @@ concurrency:
 
 jobs:
   generate:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'perf/generate-image-variants'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/perf/generate-image-variants' || github.event.pull_request.head.ref == 'perf/generate-image-variants'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -38,7 +40,7 @@ jobs:
       - name: Generate and validate variants
         run: python scripts/generate-image-variants.py
 
-      - name: Commit generated assets to the pull-request branch
+      - name: Commit generated assets to the branch
         env:
           BRANCH_NAME: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
